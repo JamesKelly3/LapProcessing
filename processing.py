@@ -8,7 +8,7 @@ def get_replay(url):
     resp = requests.get(url)
     return resp.json()
 
-def parse_replay(replay):
+def parse_replay(replay, filter=True):
     cars = {}
     for car in replay["cars"]:
         cars[car['id']] = car['carModelName']
@@ -22,7 +22,7 @@ def parse_replay(replay):
             continue
         laps[drivers[lap['driverId']]].append((lap['lapNumber'], lap['lapTimeMS']/1000, lap['isValid'], lap['topSpeedKMH']))
 
-    return filter_laps(laps)
+    return filter_laps(laps) if filter else laps
 
 def mean_var_from_laps(laps):
     ret = {}
@@ -38,12 +38,14 @@ def filter_laps(laps):
             del ret[driver]
     return ret
 
-def plot_norms(laps, centre_time):
+def plot_norms(laps, alien_time):
     f, ax = plt.subplots()
-    x_axis = np.arange(centre_time * 0.9, centre_time * 1.1, 0.05)
+    x_axis = np.arange(alien_time * 0.98, alien_time * 1.1, 0.05)
     m_v = mean_var_from_laps(laps)
     for driver, (m, std) in m_v.items():
         ax.plot(x_axis, norm.pdf(x_axis, m, std), label=driver)
+    ax.axline((alien_time, 0), (alien_time, 1), linestyle="--", label="alien time")
+    ax.axline((alien_time*1.03, 0), (alien_time*1.03, 1), linestyle=":", label="alien time + 3%")
     ax.set_title("Lap time distribution")
     ax.set_xlabel("Lap time (s)")
     ax.legend()
@@ -78,23 +80,92 @@ def plot_max_speed(laps):
     plt.xticks(rotation=30, fontsize=8)
 
 REPLAYS = {
-    'bathhurst': ("https://www.accreplay.com/api/replays/31871", 124),
-    'silverstone': ("https://www.accreplay.com/api/replays/31874", 122),
-    'kyalami': ("https://www.accreplay.com/api/replays/32377", 104),
-    'monza': ("https://www.accreplay.com/api/replays/32378", 110),
-    'hungaroring': ("https://www.accreplay.com/api/replays/32379", 107),
-    'zolder': ("https://www.accreplay.com/api/replays/32380", 91),
-    'spa': ("https://www.accreplay.com/api/replays/32381", 145),
-    'imola': ("https://www.accreplay.com/api/replays/32382", 105),
-    'laguna_seca': ("https://www.accreplay.com/api/replays/32384", 90),
-    'nurburgring_24h': ("https://www.accreplay.com/api/replays/32383", 520),
-    'misano': ("https://www.accreplay.com/api/replays/32392", 100),
+    'bathhurst': {
+        "2024": {
+            "race": "https://www.accreplay.com/api/replays/31871",
+            "qualifying": "",
+            "practice": [],
+        },
+        "alien_time": 118.9,
+    },
+    'silverstone': {
+        "2024": {
+            "race": "https://www.accreplay.com/api/replays/31874",
+            "practice": [],
+        },
+        "alien_time": 116.6,
+    },
+    'kyalami': {
+        "2024": {
+            "race": "https://www.accreplay.com/api/replays/32377",
+            "practice": [],
+        },
+        "alien_time": 99.5,
+    },
+    'monza': {
+        "2024": {
+            "race": "https://www.accreplay.com/api/replays/32378",
+            "practice": [],
+        },
+        "alien_time": 105.9,
+    },
+    'hungaroring': {
+        "2024": {
+             "race": "https://www.accreplay.com/api/replays/32379",
+            "practice": [],
+        },
+        "alien_time": 102.2,
+    },
+    'zolder': {
+        "2024": {
+            "race": "https://www.accreplay.com/api/replays/32380",
+            "practice": [],
+        },
+        "alien_time": 86.9,
+    },
+    'spa': {
+        "2024": {
+            "race": "https://www.accreplay.com/api/replays/32381",
+         "practice": [],
+        },
+        "alien_time": 135.2,
+    },
+    'imola': {
+        "2024": {
+            "race": "https://www.accreplay.com/api/replays/32382",
+            "practice": [],
+        },
+        "alien_time": 99.5,
+    },
+    'laguna_seca': {
+        "2024": {
+            "race": "https://www.accreplay.com/api/replays/32384",
+            "practice": [],
+        },
+        "alien_time": 81.2,
+    },
+    'nurburgring_24h': {
+        "2024": {
+            "race": "https://www.accreplay.com/api/replays/32383",
+            "practice": [],
+        },
+        "alien_time": 485.0,
+    },
+    'misano': {
+        "2024": {
+            "race": "https://www.accreplay.com/api/replays/32392",
+            "practice": ["https://www.accreplay.com/api/replays/32464"],
+            "qualifying": "https://www.accreplay.com/api/replays/32463",
+        },
+        "alien_time": 92.4,
+    }
 }
 
-laps = parse_replay(get_replay(REPLAYS["bathhurst"][0]))
-centre_time = REPLAYS["bathhurst"][1]
+track = "imola"
+laps = parse_replay(get_replay(REPLAYS[track]["2024"]["race"]), filter=True)
+alien_time = REPLAYS[track]["alien_time"]
 plot_max_speed(laps)
-plot_norms(laps, centre_time)
+plot_norms(laps, alien_time)
 plot_laps(laps)
 plot_sorted_laps(laps)
 plt.show()
