@@ -33,13 +33,18 @@ def parse_acc_rc_dump(file):
         pit_times = defaultdict(dict)
         valid_laps = defaultdict(list)
         accidents = []
+        sector_times = defaultdict(lambda: defaultdict(lambda: float("inf")))
         for lap in parsed["laps"]:
             if lap["pitTime"] > 10 * 1000: # file sometimes has tiny pitstops (I guess a bug in acc_rc) *1000 because it's ms
                 pit_times[lap["driverNickName"]][lap["lapNumber"]] = lap["pitTime"]
             valid_laps[lap["driverNickName"]].append(lap["flags"] != 0)
-            if lap["accidents"] != 0:
+            if lap["accidents"] in (1, 1025):
                 accidents.append((lap["driverNickName"], lap["lapNumber"]))
-    return pit_times, valid_laps, accidents
+            if lap["flags"] == 0:
+                for sector in ('sector1', 'sector2', 'sector3'):
+                    driver = lap['driverNickName']
+                    sector_times[driver][sector] = min(sector_times[driver][sector], lap[sector]/1000)
+    return pit_times, valid_laps, accidents, sector_times
 
 
 def mean_var_from_laps(laps):
@@ -134,6 +139,37 @@ def plot_accidents(accidents):
     for driver, lap in accidents:
         ax.scatter(lap, driver, color=DRIVER_COLOURS[driver],marker='x', s=100)
     plt.xticks(np.arange(max([l+1 for d, l in accidents])))
+    ax.set_title("Accidents")
+
+def plot_best_sectors(sector_times):
+    f, ax = plt.subplots(2, 2)
+    set_lim = defaultdict(lambda: False)
+    for driver, sectors in sector_times.items():
+
+        best_possible_time = sum(s for s in sectors.values())
+        for sector, best_time in sectors.items():
+            s_num = int(sector[-1]) -1
+            ax[int(s_num/2)][int(s_num % 2)].bar(driver, best_time, color=DRIVER_COLOURS[driver])
+            ax[int(s_num / 2)][int(s_num % 2)].set_title(f"Best {sector} time")
+            new_ymin = best_time-0.2
+            new_ymax = best_time+0.2
+            if set_lim[sector]:
+                ymin, ymax = ax[int(s_num / 2)][int(s_num % 2)].get_ylim()
+                new_ymin = min(new_ymin, ymin)
+                new_ymax = max(new_ymax, ymax)
+            ax[int(s_num / 2)][int(s_num % 2)].set_ylim(new_ymin, new_ymax)
+            set_lim[sector] = True
+
+        new_ymin = best_possible_time - 0.2
+        new_ymax = best_possible_time + 0.2
+        if set_lim["overall"]:
+            ymin, ymax = ax[1][1].get_ylim()
+            new_ymin = min(new_ymin, ymin)
+            new_ymax = max(new_ymax, ymax)
+        ax[1][1].bar(driver, best_possible_time, color=DRIVER_COLOURS[driver])
+        ax[1][1].set_title("Best possible time")
+        ax[1][1].set_ylim(new_ymin, new_ymax)
+        set_lim["overall"] = True
 
 def plot_gaps(laps):
     f, ax = plt.subplots()
@@ -244,7 +280,14 @@ REPLAYS = {
             "qualifying": "https://www.accreplay.com/api/replays/32463",
         },
         "alien_time": 92.4,
-    }
+    },
+    "cota": {
+        "2024":{
+            "race": "",
+            "qualifying": "",
+        },
+        "alien_time": 124.5,
+    },
 }
 
 plt.rcParams['figure.figsize'] = [11, 8]
@@ -253,7 +296,7 @@ year = "2024"
 session = "race"
 laps = parse_replay(get_replay(REPLAYS[track][year][session]), filter=True)
 unfiltered_laps = parse_replay(get_replay(REPLAYS[track][year][session]), filter=False)
-pit, invalid, accidents = parse_acc_rc_dump(f"ACC_companion_dumps/{track}.json")
+pit, invalid, accidents, sector_times = parse_acc_rc_dump(f"ACC_companion_dumps/{track}.json")
 alien_time = REPLAYS[track]["alien_time"]
 plot_max_speed(laps)
 plot_norms(laps, alien_time)
@@ -263,5 +306,6 @@ plot_gaps(unfiltered_laps)
 plot_pit_times(pit)
 plot_valid_laps(invalid)
 plot_accidents(accidents)
+plot_best_sectors(sector_times)
 plt.show()
 
