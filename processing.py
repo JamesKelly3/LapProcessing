@@ -3,6 +3,7 @@ import requests
 from collections import defaultdict
 import matplotlib.pyplot as plt
 from scipy.stats import norm
+import textwrap
 
 def get_replay(url):
     resp = requests.get(url)
@@ -59,25 +60,34 @@ def plot_laps(laps):
     ax.set_xlabel("Lap of race")
     ax.legend()
 
-def plot_sorted_laps(laps):
+def format_time(s):
+    return '{:02}:{:.2f}'.format(round(s) % 3600 // 60, s % 60)
+
+def plot_sorted_laps(laps, alien_time):
     f, ax = plt.subplots()
     for (d, s), l in laps.items():
         l = sorted(l, key=lambda x: x[1])
-        ax.plot(list(range(len(l))), [lap[1] for lap in l], label=d, color=DRIVER_COLOURS[s])
+        ax.plot(list(range(len(l))), [(lap[1]/alien_time) * 100 for lap in l], label=d, color=DRIVER_COLOURS[s])
+    ax.axline((0, 103), (1, 103), linestyle=":", label="103%")
     ax.set_title("Laps by rank")
-    ax.set_ylabel("Lap time (s)")
+    ax.set_ylabel(f"pct of alien time ({format_time(alien_time)})")
     ax.set_xlabel("Lap rank")
     ax.legend()
 
 def plot_max_speed(laps):
     f, ax = plt.subplots(tight_layout=True)
-    maxes = [sorted(l, key=lambda x: x[3])[-1][3] for l in laps.values()]
-    ax.bar([d for (d, _s) in laps.keys()], maxes, color=[DRIVER_COLOURS[s] for (_d, s) in laps.keys()])
+    f.set_figwidth(15)
+    maxes = [np.mean([lap[3] for lap in l]) for l in laps.values()]
+    #maxes = [sorted(l, key=lambda x: x[3])[-1][3] for l in laps.values()]
+    x = [textwrap.fill(d, width=15) for (d, _s) in laps.keys()]
+    ax.bar(x, maxes, color=[DRIVER_COLOURS[s] for (_d, s) in laps.keys()])
+    for i in range(len(x)):
+        plt.text(i, maxes[i], f"{maxes[i]:.2f}", ha='center')
     ax.grid(True)
     ax.set_title("Max Speed")
     ax.set_ylabel("Max Speed (KPH)")
     ax.set_ylim([min(maxes)*0.98, max(maxes)*1.02])
-    plt.xticks(rotation=15, fontsize=8)
+    plt.xticks(rotation=0, fontsize=8)
 
 def plot_gaps(laps):
     f, ax = plt.subplots()
@@ -93,11 +103,13 @@ def plot_gaps(laps):
             gap_to_first = max(cum_time - x[i] for x in cum_lap_time.values() if i < len(x))
             out2.append(gap_to_first)
         ax.plot(list(range(len(out2))), out2, label=driver, color=DRIVER_COLOURS[shortName])
-        ax.set_title("Gap to first")
-        ax.legend()
+    ax.set_title("Gap to first")
+    ax.legend()
+    ax.set_ylabel("Gap to first (s)")
+    ax.set_xlabel("Lap")
 
 DRIVER_COLOURS = {
-    "CRE": "dimgray",
+    "CRE": "black",
     "RID": "indianred",
     "VLK": "darkgoldenrod",
     "DIV": "darkolivegreen",
@@ -188,8 +200,8 @@ REPLAYS = {
         "alien_time": 92.4,
     }
 }
-
-track = "silverstone"
+plt.rcParams['figure.figsize'] = [11, 8]
+track = "misano"
 year = "2024"
 session = "race"
 laps = parse_replay(get_replay(REPLAYS[track][year][session]), filter=True)
@@ -198,7 +210,7 @@ alien_time = REPLAYS[track]["alien_time"]
 plot_max_speed(laps)
 plot_norms(laps, alien_time)
 plot_laps(laps)
-plot_sorted_laps(laps)
+plot_sorted_laps(laps, alien_time)
 plot_gaps(unfiltered_laps)
 plt.show()
 
