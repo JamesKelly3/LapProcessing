@@ -144,8 +144,9 @@ def plot_accidents(accidents):
 def plot_best_sectors(sector_times):
     f, ax = plt.subplots(2, 2)
     set_lim = defaultdict(lambda: False)
+    sector_i = defaultdict(int)
+    i = 0
     for driver, sectors in sector_times.items():
-
         best_possible_time = sum(s for s in sectors.values())
         for sector, best_time in sectors.items():
             s_num = int(sector[-1]) -1
@@ -158,7 +159,9 @@ def plot_best_sectors(sector_times):
                 new_ymin = min(new_ymin, ymin)
                 new_ymax = max(new_ymax, ymax)
             ax[int(s_num / 2)][int(s_num % 2)].set_ylim(new_ymin, new_ymax)
+            ax[int(s_num / 2)][int(s_num % 2)].text(sector_i[sector], best_time, f"{format_time(best_time)}", ha="center")
             set_lim[sector] = True
+            sector_i[sector] += 1
 
         new_ymin = best_possible_time - 0.2
         new_ymax = best_possible_time + 0.2
@@ -169,6 +172,8 @@ def plot_best_sectors(sector_times):
         ax[1][1].bar(driver, best_possible_time, color=DRIVER_COLOURS[driver])
         ax[1][1].set_title("Best possible time")
         ax[1][1].set_ylim(new_ymin, new_ymax)
+        ax[1][1].text(i, best_possible_time, f"{format_time(best_possible_time)}", ha="center")
+        i+=1
         set_lim["overall"] = True
 
 def plot_gaps(laps):
