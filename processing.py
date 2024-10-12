@@ -14,7 +14,7 @@ def parse_replay(replay, filter=True):
         cars[car['id']] = car['carModelName']
     drivers = {}
     for driver in replay["drivers"]:
-        drivers[driver['id']] = f"{driver["firstName"]} {driver['lastName']}: {cars[driver['carId']]}"
+        drivers[driver['id']] = f"{driver["firstName"]} {driver['lastName']}: {cars[driver['carId']]}", driver["shortName"]
 
     laps = defaultdict(list)
     for lap in replay['laps']:
@@ -42,9 +42,9 @@ def plot_norms(laps, alien_time):
     f, ax = plt.subplots()
     x_axis = np.arange(alien_time * 0.98, alien_time * 1.1, 0.05)
     m_v = mean_var_from_laps(laps)
-    for driver, (m, std) in m_v.items():
-        ax.plot(x_axis, norm.pdf(x_axis, m, std), label=driver)
-    ax.axline((alien_time, 0), (alien_time, 1), linestyle="--", label="alien time")
+    for (driver, shortName), (m, std) in m_v.items():
+        ax.plot(x_axis, norm.pdf(x_axis, m, std), label=driver, color=DRIVER_COLOURS[shortName])
+    ax.axline((alien_time, 0), (alien_time, 1), linestyle="--", label="alien time", )
     ax.axline((alien_time*1.03, 0), (alien_time*1.03, 1), linestyle=":", label="alien time + 3%")
     ax.set_title("Lap time distribution")
     ax.set_xlabel("Lap time (s)")
@@ -52,8 +52,8 @@ def plot_norms(laps, alien_time):
 
 def plot_laps(laps):
     f, ax = plt.subplots()
-    for d, l in laps.items():
-        plt.plot([lap[0] for lap in l], [lap[1] for lap in l], label=d)
+    for (d, s), l in laps.items():
+        plt.plot([lap[0] for lap in l], [lap[1] for lap in l], label=d, color=DRIVER_COLOURS[s])
     ax.set_title("Laps in order")
     ax.set_ylabel("Lap time (s)")
     ax.set_xlabel("Lap of race")
@@ -61,23 +61,51 @@ def plot_laps(laps):
 
 def plot_sorted_laps(laps):
     f, ax = plt.subplots()
-    for d, l in laps.items():
+    for (d, s), l in laps.items():
         l = sorted(l, key=lambda x: x[1])
-        ax.plot(list(range(len(l))), [lap[1] for lap in l], label=d)
+        ax.plot(list(range(len(l))), [lap[1] for lap in l], label=d, color=DRIVER_COLOURS[s])
     ax.set_title("Laps by rank")
     ax.set_ylabel("Lap time (s)")
     ax.set_xlabel("Lap rank")
     ax.legend()
 
 def plot_max_speed(laps):
-    f, ax = plt.subplots()
+    f, ax = plt.subplots(tight_layout=True)
     maxes = [sorted(l, key=lambda x: x[3])[-1][3] for l in laps.values()]
-    ax.bar([d for d in laps.keys()], maxes)
+    ax.bar([d for (d, _s) in laps.keys()], maxes, color=[DRIVER_COLOURS[s] for (_d, s) in laps.keys()])
     ax.grid(True)
     ax.set_title("Max Speed")
     ax.set_ylabel("Max Speed (KPH)")
     ax.set_ylim([min(maxes)*0.98, max(maxes)*1.02])
-    plt.xticks(rotation=30, fontsize=8)
+    plt.xticks(rotation=15, fontsize=8)
+
+def plot_gaps(laps):
+    f, ax = plt.subplots()
+    cum_lap_time = {}
+    for driver, lap_l in laps.items():
+        out = [0]
+        for i, lap in enumerate(lap_l):
+            out.append(lap[1] + out[i])
+        cum_lap_time[driver] = out
+    for (driver, shortName), lap_l in cum_lap_time.items():
+        out2 = []
+        for i, cum_time in enumerate(lap_l):
+            gap_to_first = max(cum_time - x[i] for x in cum_lap_time.values() if i < len(x))
+            out2.append(gap_to_first)
+        ax.plot(list(range(len(out2))), out2, label=driver, color=DRIVER_COLOURS[shortName])
+        ax.set_title("Gap to first")
+        ax.legend()
+
+DRIVER_COLOURS = {
+    "CRE": "dimgray",
+    "RID": "indianred",
+    "VLK": "darkgoldenrod",
+    "DIV": "darkolivegreen",
+    "WOJ": "springgreen",
+    "RJT": "teal",
+    "JKE": "darkorchid",
+    "IYK": "red",
+}
 
 REPLAYS = {
     'bathhurst': {
@@ -161,12 +189,16 @@ REPLAYS = {
     }
 }
 
-track = "imola"
-laps = parse_replay(get_replay(REPLAYS[track]["2024"]["race"]), filter=True)
+track = "silverstone"
+year = "2024"
+session = "race"
+laps = parse_replay(get_replay(REPLAYS[track][year][session]), filter=True)
+unfiltered_laps = parse_replay(get_replay(REPLAYS[track][year][session]), filter=False)
 alien_time = REPLAYS[track]["alien_time"]
 plot_max_speed(laps)
 plot_norms(laps, alien_time)
 plot_laps(laps)
 plot_sorted_laps(laps)
+plot_gaps(unfiltered_laps)
 plt.show()
 
