@@ -2,6 +2,7 @@ import numpy as np
 import requests
 from collections import defaultdict
 import matplotlib.pyplot as plt
+from PIL.ImageOps import scale
 from scipy.stats import norm
 import textwrap
 import json
@@ -30,10 +31,15 @@ def parse_acc_rc_dump(file):
     with open(file) as acc_rc_dump:
         parsed = json.load(acc_rc_dump)
         pit_times = defaultdict(dict)
+        valid_laps = defaultdict(list)
+        accidents = []
         for lap in parsed["laps"]:
             if lap["pitTime"] > 10 * 1000: # file sometimes has tiny pitstops (I guess a bug in acc_rc) *1000 because it's ms
                 pit_times[lap["driverNickName"]][lap["lapNumber"]] = lap["pitTime"]
-    return pit_times
+            valid_laps[lap["driverNickName"]].append(lap["flags"] != 0)
+            if lap["accidents"] != 0:
+                accidents.append((lap["driverNickName"], lap["lapNumber"]))
+    return pit_times, valid_laps, accidents
 
 
 def mean_var_from_laps(laps):
@@ -109,6 +115,25 @@ def plot_pit_times(pit):
             plt.text(i, time_ms/1000, f"{time_ms/1000}", ha='center')
             i+=1
     ax.set_title("Pit stop times")
+
+def plot_valid_laps(invalid):
+    f, ax = plt.subplots(tight_layout=True)
+    f.set_figwidth(15)
+    i = 0
+    for driver, laps_l in invalid.items():
+        valid_laps = len([l for l in laps_l if not l])
+        invalid_laps = len([l for l in laps_l if l])
+        ax.bar(driver, valid_laps, color="green")
+        ax.bar(driver, invalid_laps, bottom = valid_laps, color='red')
+        plt.text(i, valid_laps+invalid_laps, f"{(valid_laps/(valid_laps+invalid_laps))*100:.2f}%", ha='center')
+        i+=1
+    ax.set_title('Valid laps')
+
+def plot_accidents(accidents):
+    f, ax = plt.subplots()
+    for driver, lap in accidents:
+        ax.scatter(lap, driver, color=DRIVER_COLOURS[driver],marker='x', s=100)
+    plt.xticks(np.arange(max([l+1 for d, l in accidents])))
 
 def plot_gaps(laps):
     f, ax = plt.subplots()
@@ -228,7 +253,7 @@ year = "2024"
 session = "race"
 laps = parse_replay(get_replay(REPLAYS[track][year][session]), filter=True)
 unfiltered_laps = parse_replay(get_replay(REPLAYS[track][year][session]), filter=False)
-pit = parse_acc_rc_dump(f"ACC_companion_dumps/{track}.json")
+pit, invalid, accidents = parse_acc_rc_dump(f"ACC_companion_dumps/{track}.json")
 alien_time = REPLAYS[track]["alien_time"]
 plot_max_speed(laps)
 plot_norms(laps, alien_time)
@@ -236,5 +261,7 @@ plot_laps(laps)
 plot_sorted_laps(laps, alien_time)
 plot_gaps(unfiltered_laps)
 plot_pit_times(pit)
+plot_valid_laps(invalid)
+plot_accidents(accidents)
 plt.show()
 
